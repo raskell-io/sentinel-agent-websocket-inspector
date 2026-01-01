@@ -1,0 +1,36 @@
+[package]
+name = "sentinel-agent-websocket-inspector"
+version = "0.1.0"
+edition = "2021"
+authors = ["Sentinel Core Team"]
+description = "WebSocket inspection agent for Sentinel proxy"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/raskell-io/sentinel-agent-websocket-inspector"
+keywords = ["sentinel", "websocket", "security", "proxy", "agent"]
+categories = ["network-programming", "web-programming"]
+
+[[bin]]
+name = "sentinel-ws-agent"
+path = "src/main.rs"
+
+[lib]
+name = "sentinel_agent_websocket_inspector"
+path = "src/lib.rs"
+
+[dependencies]
+sentinel-agent-protocol = "0.1"
+tokio = { version = "1", features = ["full", "sync"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+base64 = "0.22"
+jsonschema = "0.18"
+rmp-serde = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+
+[dev-dependencies]
+tempfile = "3"
