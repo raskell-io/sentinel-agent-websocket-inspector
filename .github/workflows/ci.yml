@@ -1,0 +1,56 @@
+name: CI
+
+# Disabled to conserve GitHub Actions minutes
+# Uncomment triggers below to enable
+# on:
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    if: false  # Disabled - change to true to enable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-features
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    if: false  # Disabled - change to true to enable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    if: false  # Disabled - change to true to enable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    if: false  # Disabled - change to true to enable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-features -- -D warnings
