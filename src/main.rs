@@ -1,7 +1,8 @@
 //! WebSocket Inspector Agent CLI for Sentinel proxy.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
+use sentinel_agent_protocol::v2::GrpcAgentServerV2;
 use sentinel_agent_protocol::AgentServer;
 use sentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
 use std::path::PathBuf;
@@ -16,13 +17,18 @@ use tracing_subscriber::{fmt, EnvFilter};
 #[command(name = "sentinel-ws-agent")]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Unix socket path for agent communication
+    /// Unix socket path for agent communication (UDS transport)
     #[arg(
         long,
         env = "AGENT_SOCKET",
         default_value = "/tmp/sentinel-ws.sock"
     )]
     socket: String,
+
+    /// gRPC address to listen on (e.g., "0.0.0.0:50051").
+    /// If specified, the agent will use gRPC transport instead of UDS.
+    #[arg(long, env = "WS_GRPC_ADDRESS")]
+    grpc_address: Option<String>,
 
     /// Enable XSS detection in text frames
     #[arg(long, env = "WS_XSS", default_value = "true")]
@@ -173,9 +179,34 @@ async fn main() -> Result<()> {
     info!("  Fail open: {}", config.fail_open);
 
     let agent = WsInspectorAgent::new(config)?;
-    let server = AgentServer::new("ws-inspector", &args.socket, Box::new(agent));
 
-    server.run().await?;
+    // Determine transport mode based on CLI args
+    if let Some(grpc_addr) = args.grpc_address {
+        // gRPC transport (v2 protocol)
+        info!("Starting WebSocket Inspector Agent (gRPC v2)");
+        info!("  gRPC address: {}", grpc_addr);
+
+        let addr = grpc_addr
+            .parse()
+            .context("Invalid gRPC address format (expected host:port)")?;
+
+        let server = GrpcAgentServerV2::new("ws-inspector", Box::new(agent));
+
+        info!("WebSocket Inspector agent ready and listening on gRPC");
+
+        server
+            .run(addr)
+            .await
+            .context("Failed to run WebSocket Inspector gRPC server")?;
+    } else {
+        // UDS transport (v1 protocol, backward compatibility)
+        info!("Starting WebSocket Inspector Agent (UDS v1)");
+        info!("  Socket: {}", args.socket);
+        info!("Note: Use --grpc-address for v2 protocol with gRPC transport");
+
+        let server = AgentServer::new("ws-inspector", &args.socket, Box::new(agent));
+        server.run().await?;
+    }
 
     Ok(())
 }

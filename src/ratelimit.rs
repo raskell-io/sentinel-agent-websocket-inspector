@@ -159,14 +159,14 @@ impl RateLimiter {
         }
 
         // Check bytes rate limit
-        if self.config.max_bytes_per_sec > 0 {
-            if conn_state.bytes_count + message_bytes > self.config.max_bytes_per_sec {
-                return RateLimitResult::denied(
-                    conn_state.message_count,
-                    conn_state.bytes_count,
-                    RateLimitExceeded::Bytes,
-                );
-            }
+        if self.config.max_bytes_per_sec > 0
+            && conn_state.bytes_count + message_bytes > self.config.max_bytes_per_sec
+        {
+            return RateLimitResult::denied(
+                conn_state.message_count,
+                conn_state.bytes_count,
+                RateLimitExceeded::Bytes,
+            );
         }
 
         // Record the message

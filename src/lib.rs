@@ -17,11 +17,17 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use config::WsInspectorConfig;
 use inspection::{ContentInspector, Detection};
 use ratelimit::{RateLimitConfig, RateLimitExceeded, RateLimiter};
+use sentinel_agent_protocol::v2::{
+    AgentCapabilities, AgentFeatures, AgentHandlerV2, AgentLimits, CounterMetric, DrainReason,
+    GaugeMetric, HealthStatus, MetricsReport, ShutdownReason,
+};
 use sentinel_agent_protocol::{
-    AgentHandler, AgentResponse, AuditMetadata, ConfigureEvent, RequestBodyChunkEvent,
+    AgentHandler, AgentResponse, AuditMetadata, ConfigureEvent, EventType, RequestBodyChunkEvent,
     RequestCompleteEvent, RequestHeadersEvent, ResponseBodyChunkEvent, ResponseHeadersEvent,
     WebSocketDecision, WebSocketFrameEvent,
 };
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use validation::{JsonSchemaValidator, MsgpackValidator};
@@ -132,6 +138,20 @@ struct InspectorState {
 /// WebSocket Inspector Agent.
 pub struct WsInspectorAgent {
     state: RwLock<InspectorState>,
+    /// Metrics: total frames processed.
+    frames_total: AtomicU64,
+    /// Metrics: total frames blocked.
+    frames_blocked: AtomicU64,
+    /// Metrics: total frames dropped (XSS, SQLi, etc.).
+    frames_dropped: AtomicU64,
+    /// Metrics: total rate limit violations.
+    rate_limit_violations: AtomicU64,
+    /// Metrics: total size limit violations.
+    size_limit_violations: AtomicU64,
+    /// Metrics: total bytes inspected.
+    bytes_inspected: AtomicU64,
+    /// Whether the agent is draining (not accepting new requests).
+    draining: Arc<RwLock<bool>>,
 }
 
 impl WsInspectorAgent {
@@ -140,6 +160,13 @@ impl WsInspectorAgent {
         let state = Self::build_state(config)?;
         Ok(Self {
             state: RwLock::new(state),
+            frames_total: AtomicU64::new(0),
+            frames_blocked: AtomicU64::new(0),
+            frames_dropped: AtomicU64::new(0),
+            rate_limit_violations: AtomicU64::new(0),
+            size_limit_violations: AtomicU64::new(0),
+            bytes_inspected: AtomicU64::new(0),
+            draining: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -223,8 +250,22 @@ impl WsInspectorAgent {
         Ok(())
     }
 
+    /// Check if agent is draining.
+    async fn is_draining(&self) -> bool {
+        *self.draining.read().await
+    }
+
     /// Process a WebSocket frame and return a decision.
     async fn process_frame(&self, event: &WebSocketFrameEvent) -> AgentResponse {
+        // Increment total frames counter
+        self.frames_total.fetch_add(1, Ordering::Relaxed);
+
+        // Check if draining
+        if self.is_draining().await {
+            debug!("Agent is draining, allowing frame");
+            return AgentResponse::websocket_allow();
+        }
+
         let correlation_id = &event.correlation_id;
         let direction = if event.client_to_server {
             "client→server"
@@ -256,9 +297,12 @@ impl WsInspectorAgent {
             }
         };
 
+        // Track bytes inspected
+        self.bytes_inspected.fetch_add(data.len() as u64, Ordering::Relaxed);
+
         // Check size limits
         if let Some(response) =
-            Self::check_size_limits_static(&state.config, &event.opcode, data.len())
+            self.check_size_limits(&state.config, &event.opcode, data.len())
         {
             return response;
         }
@@ -270,6 +314,7 @@ impl WsInspectorAgent {
             .await;
 
         if !result.allowed {
+            self.rate_limit_violations.fetch_add(1, Ordering::Relaxed);
             let exceeded_type = match result.exceeded {
                 Some(RateLimitExceeded::Messages) => "messages",
                 Some(RateLimitExceeded::Bytes) => "bytes",
@@ -285,6 +330,7 @@ impl WsInspectorAgent {
             );
 
             if state.config.block_mode {
+                self.frames_blocked.fetch_add(1, Ordering::Relaxed);
                 return AgentResponse::default_allow()
                     .with_websocket_decision(WebSocketDecision::Close {
                         code: close_code::POLICY_VIOLATION,
@@ -347,22 +393,19 @@ impl WsInspectorAgent {
 
         // Build response based on detections
         if !all_detections.is_empty() {
-            return Self::handle_detections_static(&state.config, &all_detections, correlation_id);
+            return self.handle_detections(&state.config, &all_detections, correlation_id);
         }
 
         if !validation_errors.is_empty() {
-            return Self::handle_validation_errors_static(
-                &state.config,
-                &validation_errors,
-                correlation_id,
-            );
+            return self.handle_validation_errors(&state.config, &validation_errors, correlation_id);
         }
 
         AgentResponse::websocket_allow()
     }
 
-    /// Check size limits for a frame (static version).
-    fn check_size_limits_static(
+    /// Check size limits for a frame.
+    fn check_size_limits(
+        &self,
         config: &WsInspectorConfig,
         opcode: &str,
         size: usize,
@@ -374,6 +417,7 @@ impl WsInspectorAgent {
         };
 
         if limit > 0 && size > limit {
+            self.size_limit_violations.fetch_add(1, Ordering::Relaxed);
             debug!(
                 opcode = opcode,
                 size = size,
@@ -382,6 +426,7 @@ impl WsInspectorAgent {
             );
 
             if config.block_mode {
+                self.frames_blocked.fetch_add(1, Ordering::Relaxed);
                 return Some(
                     AgentResponse::default_allow()
                         .with_websocket_decision(WebSocketDecision::Close {
@@ -406,8 +451,9 @@ impl WsInspectorAgent {
         None
     }
 
-    /// Handle content detections (static version).
-    fn handle_detections_static(
+    /// Handle content detections.
+    fn handle_detections(
+        &self,
         config: &WsInspectorConfig,
         detections: &[Detection],
         correlation_id: &str,
@@ -426,6 +472,8 @@ impl WsInspectorAgent {
         );
 
         if config.block_mode {
+            self.frames_dropped.fetch_add(1, Ordering::Relaxed);
+            self.frames_blocked.fetch_add(1, Ordering::Relaxed);
             AgentResponse::default_allow()
                 .with_websocket_decision(WebSocketDecision::Drop)
                 .with_audit(AuditMetadata {
@@ -444,8 +492,9 @@ impl WsInspectorAgent {
         }
     }
 
-    /// Handle schema validation errors (static version).
-    fn handle_validation_errors_static(
+    /// Handle schema validation errors.
+    fn handle_validation_errors(
+        &self,
         config: &WsInspectorConfig,
         errors: &[String],
         correlation_id: &str,
@@ -457,6 +506,8 @@ impl WsInspectorAgent {
         );
 
         if config.block_mode {
+            self.frames_dropped.fetch_add(1, Ordering::Relaxed);
+            self.frames_blocked.fetch_add(1, Ordering::Relaxed);
             AgentResponse::default_allow()
                 .with_websocket_decision(WebSocketDecision::Drop)
                 .with_audit(AuditMetadata {
@@ -499,11 +550,177 @@ fn is_control_frame(opcode: &str) -> bool {
 }
 
 #[async_trait]
+impl AgentHandlerV2 for WsInspectorAgent {
+    /// Return agent capabilities for v2 protocol.
+    fn capabilities(&self) -> AgentCapabilities {
+        AgentCapabilities::new(
+            "ws-inspector",
+            "WebSocket Inspector Agent",
+            env!("CARGO_PKG_VERSION"),
+        )
+        .with_event(EventType::WebSocketFrame)
+        .with_event(EventType::Configure)
+        .with_features(AgentFeatures {
+            streaming_body: false,
+            websocket: true,
+            guardrails: false,
+            config_push: true,
+            metrics_export: true,
+            concurrent_requests: 100,
+            cancellation: true,
+            flow_control: false,
+            health_reporting: true,
+        })
+        .with_limits(AgentLimits {
+            max_body_size: 0, // Not used for WebSocket
+            max_concurrency: 100,
+            preferred_chunk_size: 64 * 1024,
+            max_memory: None,
+            max_processing_time_ms: Some(5000),
+        })
+    }
+
+    /// Return current health status.
+    fn health_status(&self) -> HealthStatus {
+        HealthStatus::healthy("ws-inspector".to_string())
+    }
+
+    /// Return metrics report.
+    fn metrics_report(&self) -> Option<MetricsReport> {
+        let mut report = MetricsReport::new("ws-inspector", 10_000);
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_frames_total",
+            self.frames_total.load(Ordering::Relaxed),
+        ));
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_frames_blocked_total",
+            self.frames_blocked.load(Ordering::Relaxed),
+        ));
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_frames_dropped_total",
+            self.frames_dropped.load(Ordering::Relaxed),
+        ));
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_rate_limit_violations_total",
+            self.rate_limit_violations.load(Ordering::Relaxed),
+        ));
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_size_limit_violations_total",
+            self.size_limit_violations.load(Ordering::Relaxed),
+        ));
+
+        report.counters.push(CounterMetric::new(
+            "ws_inspector_bytes_inspected_total",
+            self.bytes_inspected.load(Ordering::Relaxed),
+        ));
+
+        // Gauge for draining status
+        let draining = match self.draining.try_read() {
+            Ok(guard) => {
+                if *guard {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Err(_) => 0.0, // If we can't get the lock, assume not draining
+        };
+        report.gauges.push(GaugeMetric::new(
+            "ws_inspector_draining",
+            draining,
+        ));
+
+        Some(report)
+    }
+
+    /// Handle configuration updates from proxy.
+    async fn on_configure(&self, config: serde_json::Value, version: Option<String>) -> bool {
+        info!(
+            config_version = ?version,
+            "Received configuration update"
+        );
+
+        // Parse the JSON config
+        let json_config: WsInspectorConfigJson = match serde_json::from_value(config) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(error = %e, "Failed to parse configuration");
+                return false;
+            }
+        };
+
+        // Apply the configuration
+        if let Err(e) = self.reconfigure(json_config).await {
+            warn!(error = %e, "Failed to apply configuration");
+            return false;
+        }
+
+        true
+    }
+
+    /// Handle shutdown request.
+    async fn on_shutdown(&self, reason: ShutdownReason, grace_period_ms: u64) {
+        info!(
+            reason = ?reason,
+            grace_period_ms = grace_period_ms,
+            "Received shutdown request"
+        );
+
+        // Set draining to stop accepting new requests
+        *self.draining.write().await = true;
+    }
+
+    /// Handle drain request.
+    async fn on_drain(&self, duration_ms: u64, reason: DrainReason) {
+        info!(
+            duration_ms = duration_ms,
+            reason = ?reason,
+            "Received drain request"
+        );
+
+        // Set draining flag
+        *self.draining.write().await = true;
+    }
+
+    async fn on_request_headers(&self, _event: RequestHeadersEvent) -> AgentResponse {
+        // WebSocket inspector only handles WebSocket frames
+        AgentResponse::default_allow()
+    }
+
+    async fn on_request_body_chunk(&self, _event: RequestBodyChunkEvent) -> AgentResponse {
+        AgentResponse::default_allow()
+    }
+
+    async fn on_response_headers(&self, _event: ResponseHeadersEvent) -> AgentResponse {
+        AgentResponse::default_allow()
+    }
+
+    async fn on_response_body_chunk(&self, _event: ResponseBodyChunkEvent) -> AgentResponse {
+        AgentResponse::default_allow()
+    }
+
+    async fn on_request_complete(&self, _event: RequestCompleteEvent) -> AgentResponse {
+        AgentResponse::default_allow()
+    }
+
+    async fn on_websocket_frame(&self, event: WebSocketFrameEvent) -> AgentResponse {
+        self.process_frame(&event).await
+    }
+}
+
+/// v1 AgentHandler implementation for backward compatibility with UDS transport.
+/// This delegates to the v2 handler where appropriate.
+#[async_trait]
 impl AgentHandler for WsInspectorAgent {
     async fn on_configure(&self, event: ConfigureEvent) -> AgentResponse {
         info!(
             agent_id = %event.agent_id,
-            "Received configuration event"
+            "Received v1 configuration event"
         );
 
         // Parse the JSON config
@@ -531,7 +748,6 @@ impl AgentHandler for WsInspectorAgent {
     }
 
     async fn on_request_headers(&self, _event: RequestHeadersEvent) -> AgentResponse {
-        // WebSocket inspector only handles WebSocket frames
         AgentResponse::default_allow()
     }
 
@@ -587,7 +803,7 @@ mod tests {
     async fn test_clean_message() {
         let agent = WsInspectorAgent::new(test_config()).unwrap();
         let event = make_text_frame("Hello, world!", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         assert!(matches!(
             response.websocket_decision,
@@ -599,7 +815,7 @@ mod tests {
     async fn test_xss_detection() {
         let agent = WsInspectorAgent::new(test_config()).unwrap();
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         assert!(matches!(
             response.websocket_decision,
@@ -612,7 +828,7 @@ mod tests {
     async fn test_sqli_detection() {
         let agent = WsInspectorAgent::new(test_config()).unwrap();
         let event = make_text_frame("UNION SELECT * FROM users", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         assert!(matches!(
             response.websocket_decision,
@@ -630,7 +846,7 @@ mod tests {
         };
         let agent = WsInspectorAgent::new(config).unwrap();
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         // Should allow but with detection tags
         assert!(matches!(
@@ -650,7 +866,7 @@ mod tests {
         };
         let agent = WsInspectorAgent::new(config).unwrap();
         let event = make_text_frame("This message is way too long", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         assert!(matches!(
             response.websocket_decision,
@@ -669,7 +885,7 @@ mod tests {
         };
         let agent = WsInspectorAgent::new(config).unwrap();
         let event = make_text_frame("<script>UNION SELECT; ls</script>", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
 
         // Should allow since all detection is disabled
         assert!(matches!(
@@ -690,25 +906,22 @@ mod tests {
 
         // Verify XSS is blocked initially
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event.clone()).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event.clone()).await;
         assert!(matches!(
             response.websocket_decision,
             Some(WebSocketDecision::Drop)
         ));
 
-        // Configure to disable XSS detection
-        let configure_event = ConfigureEvent {
-            agent_id: "test-agent".to_string(),
-            config: serde_json::json!({
-                "xss-detection": false
-            }),
-        };
-        let response = agent.on_configure(configure_event).await;
-        assert!(matches!(response.decision, sentinel_agent_protocol::Decision::Allow));
+        // Configure to disable XSS detection (v2 API)
+        let config_json = serde_json::json!({
+            "xss-detection": false
+        });
+        let result = AgentHandlerV2::on_configure(&agent, config_json, Some("1.0".to_string())).await;
+        assert!(result); // Should return true on success
 
         // Verify XSS is now allowed
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
         assert!(matches!(
             response.websocket_decision,
             Some(WebSocketDecision::Allow)
@@ -726,25 +939,22 @@ mod tests {
 
         // Verify XSS is blocked initially
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event.clone()).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event.clone()).await;
         assert!(matches!(
             response.websocket_decision,
             Some(WebSocketDecision::Drop)
         ));
 
-        // Configure to detect-only mode
-        let configure_event = ConfigureEvent {
-            agent_id: "test-agent".to_string(),
-            config: serde_json::json!({
-                "block-mode": false
-            }),
-        };
-        let response = agent.on_configure(configure_event).await;
-        assert!(matches!(response.decision, sentinel_agent_protocol::Decision::Allow));
+        // Configure to detect-only mode (v2 API)
+        let config_json = serde_json::json!({
+            "block-mode": false
+        });
+        let result = AgentHandlerV2::on_configure(&agent, config_json, None).await;
+        assert!(result); // Should return true on success
 
         // Verify XSS is detected but allowed (detect-only mode)
         let event = make_text_frame("<script>alert(1)</script>", true);
-        let response = agent.on_websocket_frame(event).await;
+        let response = AgentHandlerV2::on_websocket_frame(&agent, event).await;
         assert!(matches!(
             response.websocket_decision,
             Some(WebSocketDecision::Allow)
@@ -758,17 +968,48 @@ mod tests {
         let config = WsInspectorConfig::default();
         let agent = WsInspectorAgent::new(config).unwrap();
 
-        // Send invalid config type (array instead of object)
-        let configure_event = ConfigureEvent {
-            agent_id: "test-agent".to_string(),
-            config: serde_json::json!([1, 2, 3]),
-        };
-        let response = agent.on_configure(configure_event).await;
+        // Send invalid config type (array instead of object) - v2 API
+        let config_json = serde_json::json!([1, 2, 3]);
+        let result = AgentHandlerV2::on_configure(&agent, config_json, None).await;
 
-        // Should return a block response with error
-        assert!(matches!(
-            response.decision,
-            sentinel_agent_protocol::Decision::Block { status: 500, .. }
-        ));
+        // Should return false on invalid config
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_capabilities() {
+        let config = WsInspectorConfig::default();
+        let agent = WsInspectorAgent::new(config).unwrap();
+        let caps = agent.capabilities();
+
+        assert_eq!(caps.agent_id, "ws-inspector");
+        assert_eq!(caps.name, "WebSocket Inspector Agent");
+        assert!(caps.supports_event(EventType::WebSocketFrame));
+        assert!(caps.features.websocket);
+        assert!(caps.features.metrics_export);
+        assert!(caps.features.health_reporting);
+    }
+
+    #[test]
+    fn test_health_status() {
+        let config = WsInspectorConfig::default();
+        let agent = WsInspectorAgent::new(config).unwrap();
+        let health = agent.health_status();
+
+        assert!(health.is_healthy());
+        assert_eq!(health.agent_id, "ws-inspector");
+    }
+
+    #[test]
+    fn test_metrics_report() {
+        let config = WsInspectorConfig::default();
+        let agent = WsInspectorAgent::new(config).unwrap();
+        let report = agent.metrics_report();
+
+        assert!(report.is_some());
+        let report = report.unwrap();
+        assert_eq!(report.agent_id, "ws-inspector");
+        assert!(!report.counters.is_empty());
+        assert!(!report.gauges.is_empty());
     }
 }

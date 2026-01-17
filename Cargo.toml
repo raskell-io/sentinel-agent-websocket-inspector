@@ -1,6 +1,6 @@
 [package]
 name = "sentinel-agent-websocket-inspector"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Sentinel Core Team"]
 description = "WebSocket inspection agent for Sentinel proxy"
