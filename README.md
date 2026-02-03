@@ -2,6 +2,8 @@
 
 A WebSocket inspection agent for the Sentinel proxy. Provides security controls for WebSocket traffic including content filtering, schema validation, rate limiting, and size limits.
 
+> **Note:** Inspection operates on individual WebSocket frames. Fragmented messages are not reassembled before inspection, which means payloads split across multiple frames may bypass detection patterns.
+
 ## Features
 
 ### Content Filtering
@@ -128,12 +130,18 @@ Detections are logged with audit tags:
 
 Configure the agent in your Sentinel proxy configuration:
 
-```yaml
-agents:
-  websocket-inspector:
-    path: /tmp/sentinel-ws.sock
-    events:
-      - websocket_frame
+```kdl
+agents {
+    agent "websocket-inspector" {
+        type "custom"
+        transport "unix_socket" {
+            path "/tmp/sentinel-ws.sock"
+        }
+        events ["websocket_frame"]
+        timeout-ms 50
+        failure-mode "open"
+    }
+}
 ```
 
 ## Development
