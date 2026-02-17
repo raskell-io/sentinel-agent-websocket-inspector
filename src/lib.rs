@@ -1,4 +1,4 @@
-//! WebSocket Inspector Agent for Sentinel proxy.
+//! WebSocket Inspector Agent for Zentinel proxy.
 //!
 //! Provides security controls for WebSocket traffic including:
 //! - Content filtering (XSS, SQLi, command injection)
@@ -17,11 +17,11 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use config::WsInspectorConfig;
 use inspection::{ContentInspector, Detection};
 use ratelimit::{RateLimitConfig, RateLimitExceeded, RateLimiter};
-use sentinel_agent_protocol::v2::{
+use zentinel_agent_protocol::v2::{
     AgentCapabilities, AgentFeatures, AgentHandlerV2, AgentLimits, CounterMetric, DrainReason,
     GaugeMetric, HealthStatus, MetricsReport, ShutdownReason,
 };
-use sentinel_agent_protocol::{
+use zentinel_agent_protocol::{
     AgentHandler, AgentResponse, AuditMetadata, ConfigureEvent, EventType, RequestBodyChunkEvent,
     RequestCompleteEvent, RequestHeadersEvent, ResponseBodyChunkEvent, ResponseHeadersEvent,
     WebSocketDecision, WebSocketFrameEvent,

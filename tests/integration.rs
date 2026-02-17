@@ -1,13 +1,13 @@
-//! Integration tests for the WebSocket Inspector agent using the sentinel-agent-protocol.
+//! Integration tests for the WebSocket Inspector agent using the zentinel-agent-protocol.
 //!
 //! These tests spin up an actual AgentServer and connect via AgentClient
 //! to verify the full protocol flow.
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use sentinel_agent_protocol::{
+use zentinel_agent_protocol::{
     AgentClient, AgentServer, EventType, WebSocketDecision, WebSocketFrameEvent,
 };
-use sentinel_agent_websocket_inspector::{Config, WsInspectorAgent};
+use zentinel_agent_websocket_inspector::{Config, WsInspectorAgent};
 use std::time::Duration;
 use tempfile::tempdir;
 

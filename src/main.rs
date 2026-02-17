@@ -1,27 +1,27 @@
-//! WebSocket Inspector Agent CLI for Sentinel proxy.
+//! WebSocket Inspector Agent CLI for Zentinel proxy.
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use sentinel_agent_protocol::v2::GrpcAgentServerV2;
-use sentinel_agent_protocol::AgentServer;
-use sentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
+use zentinel_agent_protocol::v2::GrpcAgentServerV2;
+use zentinel_agent_protocol::AgentServer;
+use zentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
 use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
 
-/// WebSocket Inspector Agent for Sentinel proxy
+/// WebSocket Inspector Agent for Zentinel proxy
 ///
 /// Provides security controls for WebSocket traffic including content filtering,
 /// schema validation, rate limiting, and size limits.
 #[derive(Parser, Debug)]
-#[command(name = "sentinel-ws-agent")]
+#[command(name = "zentinel-ws-agent")]
 #[command(version, about, long_about = None)]
 struct Args {
     /// Unix socket path for agent communication (UDS transport)
     #[arg(
         long,
         env = "AGENT_SOCKET",
-        default_value = "/tmp/sentinel-ws.sock"
+        default_value = "/tmp/zentinel-ws.sock"
     )]
     socket: String,
 

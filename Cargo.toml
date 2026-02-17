@@ -1,24 +1,24 @@
 [package]
-name = "sentinel-agent-websocket-inspector"
+name = "zentinel-agent-websocket-inspector"
 version = "0.2.0"
 edition = "2021"
-authors = ["Sentinel Core Team"]
-description = "WebSocket inspection agent for Sentinel proxy"
+authors = ["Zentinel Core Team"]
+description = "WebSocket inspection agent for Zentinel proxy"
 license = "Apache-2.0"
-repository = "https://github.com/raskell-io/sentinel-agent-websocket-inspector"
-keywords = ["sentinel", "websocket", "security", "proxy", "agent"]
+repository = "https://github.com/zentinelproxy/zentinel-agent-websocket-inspector"
+keywords = ["zentinel", "websocket", "security", "proxy", "agent"]
 categories = ["network-programming", "web-programming"]
 
 [[bin]]
-name = "sentinel-ws-agent"
+name = "zentinel-ws-agent"
 path = "src/main.rs"
 
 [lib]
-name = "sentinel_agent_websocket_inspector"
+name = "zentinel_agent_websocket_inspector"
 path = "src/lib.rs"
 
 [dependencies]
-sentinel-agent-protocol = "0.3"
+zentinel-agent-protocol = "0.3"
 tokio = { version = "1", features = ["full", "sync"] }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }

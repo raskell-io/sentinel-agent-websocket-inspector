@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-# Sentinel WebSocket Inspector Agent Container Image
+# Zentinel WebSocket Inspector Agent Container Image
 #
 # Targets:
 #   - prebuilt: For CI with pre-built binaries
@@ -10,16 +10,16 @@
 ################################################################################
 FROM gcr.io/distroless/cc-debian12:nonroot AS prebuilt
 
-COPY sentinel-ws-agent /sentinel-ws-agent
+COPY zentinel-ws-agent /zentinel-ws-agent
 
-LABEL org.opencontainers.image.title="Sentinel WebSocket Inspector Agent" \
-      org.opencontainers.image.description="Sentinel WebSocket Inspector Agent for Sentinel reverse proxy" \
+LABEL org.opencontainers.image.title="Zentinel WebSocket Inspector Agent" \
+      org.opencontainers.image.description="Zentinel WebSocket Inspector Agent for Zentinel reverse proxy" \
       org.opencontainers.image.vendor="Raskell" \
-      org.opencontainers.image.source="https://github.com/raskell-io/sentinel-agent-websocket-inspector"
+      org.opencontainers.image.source="https://github.com/zentinelproxy/zentinel-agent-websocket-inspector"
 
-ENV RUST_LOG=info,sentinel_ws_agent=debug \
-    SOCKET_PATH=/var/run/sentinel/websocket-inspector.sock
+ENV RUST_LOG=info,zentinel_ws_agent=debug \
+    SOCKET_PATH=/var/run/zentinel/websocket-inspector.sock
 
 USER nonroot:nonroot
 
-ENTRYPOINT ["/sentinel-ws-agent"]
+ENTRYPOINT ["/zentinel-ws-agent"]

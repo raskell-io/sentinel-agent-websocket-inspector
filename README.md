@@ -1,6 +1,6 @@
-# sentinel-agent-websocket-inspector
+# zentinel-agent-websocket-inspector
 
-A WebSocket inspection agent for the Sentinel proxy. Provides security controls for WebSocket traffic including content filtering, schema validation, rate limiting, and size limits.
+A WebSocket inspection agent for the Zentinel proxy. Provides security controls for WebSocket traffic including content filtering, schema validation, rate limiting, and size limits.
 
 > **Note:** Inspection operates on individual WebSocket frames. Fragmented messages are not reassembled before inspection, which means payloads split across multiple frames may bypass detection patterns.
 
@@ -41,29 +41,29 @@ cargo build --release
 
 ```bash
 # Basic usage with defaults (XSS, SQLi, command injection enabled)
-sentinel-ws-agent --socket /tmp/sentinel-ws.sock
+zentinel-ws-agent --socket /tmp/zentinel-ws.sock
 
 # With rate limiting
-sentinel-ws-agent \
+zentinel-ws-agent \
   --max-messages-per-sec 100 \
   --max-bytes-per-sec 1048576 \
   --rate-limit-burst 20
 
 # With JSON Schema validation
-sentinel-ws-agent --json-schema /path/to/schema.json
+zentinel-ws-agent --json-schema /path/to/schema.json
 
 # Detect-only mode (log but don't block)
-sentinel-ws-agent --block-mode false
+zentinel-ws-agent --block-mode false
 
 # Enable verbose logging
-sentinel-ws-agent -v
+zentinel-ws-agent -v
 ```
 
 ## CLI Options
 
 | Option | Env Var | Description | Default |
 |--------|---------|-------------|---------|
-| `--socket` | `AGENT_SOCKET` | Unix socket path | `/tmp/sentinel-ws.sock` |
+| `--socket` | `AGENT_SOCKET` | Unix socket path | `/tmp/zentinel-ws.sock` |
 | `--xss-detection` | `WS_XSS` | Enable XSS detection | `true` |
 | `--sqli-detection` | `WS_SQLI` | Enable SQLi detection | `true` |
 | `--command-injection` | `WS_CMD` | Enable command injection detection | `true` |
@@ -126,16 +126,16 @@ Detections are logged with audit tags:
 - `ws-rate-limit` - Rate limit exceeded
 - `detect-only` - Added when in detect-only mode
 
-## Integration with Sentinel
+## Integration with Zentinel
 
-Configure the agent in your Sentinel proxy configuration:
+Configure the agent in your Zentinel proxy configuration:
 
 ```kdl
 agents {
     agent "websocket-inspector" {
         type "custom"
         transport "unix_socket" {
-            path "/tmp/sentinel-ws.sock"
+            path "/tmp/zentinel-ws.sock"
         }
         events ["websocket_frame"]
         timeout-ms 50
