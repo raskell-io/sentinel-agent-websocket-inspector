@@ -13,7 +13,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  BINARY_NAME: zentinel-ws-agent
+  BINARY_NAME: zentinel-websocket-inspector-agent
 
 jobs:
   build:

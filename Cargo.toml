@@ -10,7 +10,7 @@ keywords = ["zentinel", "websocket", "security", "proxy", "agent"]
 categories = ["network-programming", "web-programming"]
 
 [[bin]]
-name = "zentinel-ws-agent"
+name = "zentinel-websocket-inspector-agent"
 path = "src/main.rs"
 
 [lib]

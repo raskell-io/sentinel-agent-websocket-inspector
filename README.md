@@ -41,22 +41,22 @@ cargo build --release
 
 ```bash
 # Basic usage with defaults (XSS, SQLi, command injection enabled)
-zentinel-ws-agent --socket /tmp/zentinel-ws.sock
+zentinel-websocket-inspector-agent --socket /tmp/zentinel-ws.sock
 
 # With rate limiting
-zentinel-ws-agent \
+zentinel-websocket-inspector-agent \
   --max-messages-per-sec 100 \
   --max-bytes-per-sec 1048576 \
   --rate-limit-burst 20
 
 # With JSON Schema validation
-zentinel-ws-agent --json-schema /path/to/schema.json
+zentinel-websocket-inspector-agent --json-schema /path/to/schema.json
 
 # Detect-only mode (log but don't block)
-zentinel-ws-agent --block-mode false
+zentinel-websocket-inspector-agent --block-mode false
 
 # Enable verbose logging
-zentinel-ws-agent -v
+zentinel-websocket-inspector-agent -v
 ```
 
 ## CLI Options

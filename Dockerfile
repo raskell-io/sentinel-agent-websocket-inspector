@@ -10,7 +10,7 @@
 ################################################################################
 FROM gcr.io/distroless/cc-debian12:nonroot AS prebuilt
 
-COPY zentinel-ws-agent /zentinel-ws-agent
+COPY zentinel-websocket-inspector-agent /zentinel-websocket-inspector-agent
 
 LABEL org.opencontainers.image.title="Zentinel WebSocket Inspector Agent" \
       org.opencontainers.image.description="Zentinel WebSocket Inspector Agent for Zentinel reverse proxy" \
@@ -22,4 +22,4 @@ ENV RUST_LOG=info,zentinel_ws_agent=debug \
 
 USER nonroot:nonroot
 
-ENTRYPOINT ["/zentinel-ws-agent"]
+ENTRYPOINT ["/zentinel-websocket-inspector-agent"]
