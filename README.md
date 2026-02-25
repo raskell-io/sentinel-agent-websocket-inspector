@@ -134,10 +134,8 @@ Configure the agent in your Zentinel proxy configuration:
 agents {
     agent "websocket-inspector" {
         type "custom"
-        transport "unix_socket" {
-            path "/tmp/zentinel-ws.sock"
-        }
-        events ["websocket_frame"]
+        unix-socket "/tmp/zentinel-ws.sock"
+        events "websocket_frame"
         timeout-ms 50
         failure-mode "open"
     }
