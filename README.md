@@ -33,7 +33,29 @@ A WebSocket inspection agent for the Zentinel proxy. Provides security controls 
 
 ## Installation
 
+### Using Bundle (Recommended)
+
 ```bash
+# Install just this agent
+zentinel bundle install websocket-inspector
+
+# Or install all bundled agents
+zentinel bundle install
+```
+
+The bundle command downloads the correct binary for your platform and places it in the standard location. See the [bundle documentation](https://zentinelproxy.io/docs/deployment/bundle/) for details.
+
+### Using Cargo
+
+```bash
+cargo install zentinel-agent-websocket-inspector
+```
+
+### From Source
+
+```bash
+git clone https://github.com/zentinelproxy/zentinel-agent-websocket-inspector
+cd zentinel-agent-websocket-inspector
 cargo build --release
 ```
 

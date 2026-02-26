@@ -2,8 +2,7 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use zentinel_agent_protocol::v2::GrpcAgentServerV2;
-use zentinel_agent_protocol::AgentServer;
+use zentinel_agent_protocol::v2::{GrpcAgentServerV2, UdsAgentServerV2};
 use zentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
 use std::path::PathBuf;
 use tracing::info;
@@ -199,12 +198,11 @@ async fn main() -> Result<()> {
             .await
             .context("Failed to run WebSocket Inspector gRPC server")?;
     } else {
-        // UDS transport (v1 protocol, backward compatibility)
-        info!("Starting WebSocket Inspector Agent (UDS v1)");
+        // UDS transport (v2 protocol)
+        info!("Starting WebSocket Inspector Agent (UDS v2)");
         info!("  Socket: {}", args.socket);
-        info!("Note: Use --grpc-address for v2 protocol with gRPC transport");
 
-        let server = AgentServer::new("ws-inspector", &args.socket, Box::new(agent));
+        let server = UdsAgentServerV2::new("ws-inspector", &args.socket, Box::new(agent));
         server.run().await?;
     }
 

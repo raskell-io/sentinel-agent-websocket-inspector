@@ -22,7 +22,7 @@ use zentinel_agent_protocol::v2::{
     GaugeMetric, HealthStatus, MetricsReport, ShutdownReason,
 };
 use zentinel_agent_protocol::{
-    AgentHandler, AgentResponse, AuditMetadata, ConfigureEvent, EventType, RequestBodyChunkEvent,
+    AgentResponse, AuditMetadata, EventType, RequestBodyChunkEvent,
     RequestCompleteEvent, RequestHeadersEvent, ResponseBodyChunkEvent, ResponseHeadersEvent,
     WebSocketDecision, WebSocketFrameEvent,
 };
@@ -689,65 +689,6 @@ impl AgentHandlerV2 for WsInspectorAgent {
 
     async fn on_request_headers(&self, _event: RequestHeadersEvent) -> AgentResponse {
         // WebSocket inspector only handles WebSocket frames
-        AgentResponse::default_allow()
-    }
-
-    async fn on_request_body_chunk(&self, _event: RequestBodyChunkEvent) -> AgentResponse {
-        AgentResponse::default_allow()
-    }
-
-    async fn on_response_headers(&self, _event: ResponseHeadersEvent) -> AgentResponse {
-        AgentResponse::default_allow()
-    }
-
-    async fn on_response_body_chunk(&self, _event: ResponseBodyChunkEvent) -> AgentResponse {
-        AgentResponse::default_allow()
-    }
-
-    async fn on_request_complete(&self, _event: RequestCompleteEvent) -> AgentResponse {
-        AgentResponse::default_allow()
-    }
-
-    async fn on_websocket_frame(&self, event: WebSocketFrameEvent) -> AgentResponse {
-        self.process_frame(&event).await
-    }
-}
-
-/// v1 AgentHandler implementation for backward compatibility with UDS transport.
-/// This delegates to the v2 handler where appropriate.
-#[async_trait]
-impl AgentHandler for WsInspectorAgent {
-    async fn on_configure(&self, event: ConfigureEvent) -> AgentResponse {
-        info!(
-            agent_id = %event.agent_id,
-            "Received v1 configuration event"
-        );
-
-        // Parse the JSON config
-        let json_config: WsInspectorConfigJson = match serde_json::from_value(event.config) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(error = %e, "Failed to parse configuration");
-                return AgentResponse::block(
-                    500,
-                    Some(format!("Invalid agent configuration: {}", e)),
-                );
-            }
-        };
-
-        // Apply the configuration
-        if let Err(e) = self.reconfigure(json_config).await {
-            warn!(error = %e, "Failed to apply configuration");
-            return AgentResponse::block(
-                500,
-                Some(format!("Failed to apply configuration: {}", e)),
-            );
-        }
-
-        AgentResponse::default_allow()
-    }
-
-    async fn on_request_headers(&self, _event: RequestHeadersEvent) -> AgentResponse {
         AgentResponse::default_allow()
     }
 
