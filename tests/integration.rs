@@ -1,11 +1,12 @@
 //! Integration tests for the WebSocket Inspector agent using the zentinel-agent-protocol.
 //!
-//! These tests spin up an actual AgentServer and connect via AgentClient
+//! These tests spin up an actual UdsAgentServerV2 and connect via AgentClientV2Uds
 //! to verify the full protocol flow.
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use zentinel_agent_protocol::{
-    AgentClient, AgentServer, EventType, WebSocketDecision, WebSocketFrameEvent,
+    WebSocketDecision, WebSocketFrameEvent,
+    v2::{AgentClientV2Uds, UdsAgentServerV2},
 };
 use zentinel_agent_websocket_inspector::{Config, WsInspectorAgent};
 use std::time::Duration;
@@ -17,7 +18,7 @@ async fn start_test_server(config: Config) -> (tempfile::TempDir, std::path::Pat
     let socket_path = dir.path().join("ws-test.sock");
 
     let agent = WsInspectorAgent::new(config).expect("Failed to create agent");
-    let server = AgentServer::new("test-ws", socket_path.clone(), Box::new(agent));
+    let server = UdsAgentServerV2::new("test-ws", socket_path.clone(), Box::new(agent));
 
     tokio::spawn(async move {
         let _ = server.run().await;
@@ -30,8 +31,11 @@ async fn start_test_server(config: Config) -> (tempfile::TempDir, std::path::Pat
 }
 
 /// Create a client connected to the test server
-async fn create_client(socket_path: &std::path::Path) -> AgentClient {
-    AgentClient::unix_socket("test-client", socket_path, Duration::from_secs(5))
+async fn create_client(socket_path: &std::path::Path) -> AgentClientV2Uds {
+    AgentClientV2Uds::new("test-client", socket_path.to_string_lossy().to_string(), Duration::from_secs(5))
+        .await
+        .expect("Failed to create agent client")
+        .connect()
         .await
         .expect("Failed to connect to agent")
 }
@@ -105,7 +109,7 @@ async fn test_clean_text_message() {
 
     let event = make_text_frame("test-1", "Hello, world!", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -123,7 +127,7 @@ async fn test_clean_json_message() {
     let json_msg = r#"{"type": "chat", "message": "Hello", "timestamp": 1234567890}"#;
     let event = make_text_frame("test-2", json_msg, true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -147,7 +151,7 @@ async fn test_xss_script_tag_blocked() {
 
     let event = make_text_frame("test-xss-1", "<script>alert(1)</script>", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -168,7 +172,7 @@ async fn test_xss_event_handler_blocked() {
 
     let event = make_text_frame("test-xss-2", "onclick=alert(document.cookie)", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -189,7 +193,7 @@ async fn test_xss_javascript_uri_blocked() {
 
     let event = make_text_frame("test-xss-3", "javascript:alert(1)", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -214,7 +218,7 @@ async fn test_sqli_union_select_blocked() {
 
     let event = make_text_frame("test-sqli-1", "UNION SELECT * FROM users", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -235,7 +239,7 @@ async fn test_sqli_or_tautology_blocked() {
 
     let event = make_text_frame("test-sqli-2", "' OR '1'='1", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -256,7 +260,7 @@ async fn test_sqli_time_based_blocked() {
 
     let event = make_text_frame("test-sqli-3", "1; WAITFOR DELAY '00:00:10'", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -281,7 +285,7 @@ async fn test_cmd_injection_semicolon_blocked() {
 
     let event = make_text_frame("test-cmd-1", "; ls -la /etc/passwd", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -302,7 +306,7 @@ async fn test_cmd_injection_pipe_blocked() {
 
     let event = make_text_frame("test-cmd-2", "| cat /etc/shadow", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -323,7 +327,7 @@ async fn test_cmd_injection_backtick_blocked() {
 
     let event = make_text_frame("test-cmd-3", "`id`", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -349,7 +353,7 @@ async fn test_detect_only_allows_with_tags() {
 
     let event = make_text_frame("test-detect", "<script>UNION SELECT</script>", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -382,7 +386,7 @@ async fn test_text_frame_size_limit() {
     let large_message = "x".repeat(200);
     let event = make_text_frame("test-size", &large_message, true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -406,7 +410,7 @@ async fn test_binary_frame_size_limit() {
     let large_data = vec![0u8; 100];
     let event = make_binary_frame("test-binary-size", &large_data, true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -435,7 +439,7 @@ async fn test_rate_limit_messages_per_sec() {
     for i in 0..3 {
         let event = make_text_frame("rate-test-1", &format!("msg {}", i), true);
         let response = client
-            .send_event(EventType::WebSocketFrame, &event)
+            .send_websocket_frame(&event.correlation_id, &event)
             .await
             .expect("Failed to send event");
         assert!(is_allow(&response.websocket_decision), "Message {} should be allowed", i);
@@ -444,7 +448,7 @@ async fn test_rate_limit_messages_per_sec() {
     // 4th message should be rate limited
     let event = make_text_frame("rate-test-1", "msg 3", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -468,7 +472,7 @@ async fn test_rate_limit_separate_connections() {
     for _ in 0..2 {
         let event = make_text_frame("conn-1", "msg", true);
         client
-            .send_event(EventType::WebSocketFrame, &event)
+            .send_websocket_frame(&event.correlation_id, &event)
             .await
             .expect("Failed to send event");
     }
@@ -476,7 +480,7 @@ async fn test_rate_limit_separate_connections() {
     // Connection 1: 3rd message should be rate limited
     let event = make_text_frame("conn-1", "msg", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
     assert!(is_close_with_code(&response.websocket_decision, 1008));
@@ -484,7 +488,7 @@ async fn test_rate_limit_separate_connections() {
     // Connection 2: Should still be allowed
     let event = make_text_frame("conn-2", "msg", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
     assert!(is_allow(&response.websocket_decision));
@@ -508,7 +512,7 @@ async fn test_xss_disabled_allows_attack() {
 
     let event = make_text_frame("test-disabled", "<script>UNION SELECT `id`</script>", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -535,7 +539,7 @@ async fn test_server_to_client_inspection() {
     // Server to client message with XSS
     let event = make_text_frame("test-s2c", "<script>bad</script>", false); // false = server→client
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -572,7 +576,7 @@ async fn test_ping_frame_allowed() {
     };
 
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -603,7 +607,7 @@ async fn test_pong_frame_allowed() {
     };
 
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -633,7 +637,7 @@ async fn test_close_frame_allowed() {
     };
 
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -657,7 +661,7 @@ async fn test_custom_pattern_blocked() {
 
     let event = make_text_frame("test-custom", "token: secret-api-key-12345", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -684,7 +688,7 @@ async fn test_binary_inspection_disabled_by_default() {
     // Binary frame with XSS-like content
     let event = make_binary_frame("test-binary", b"<script>alert(1)</script>", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
@@ -707,7 +711,7 @@ async fn test_binary_inspection_enabled() {
     // Binary frame with XSS content
     let event = make_binary_frame("test-binary-2", b"<script>alert(1)</script>", true);
     let response = client
-        .send_event(EventType::WebSocketFrame, &event)
+        .send_websocket_frame(&event.correlation_id, &event)
         .await
         .expect("Failed to send event");
 
