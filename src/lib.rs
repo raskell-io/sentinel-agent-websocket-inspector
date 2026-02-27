@@ -17,20 +17,20 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use config::WsInspectorConfig;
 use inspection::{ContentInspector, Detection};
 use ratelimit::{RateLimitConfig, RateLimitExceeded, RateLimiter};
-use zentinel_agent_protocol::v2::{
-    AgentCapabilities, AgentFeatures, AgentHandlerV2, AgentLimits, CounterMetric, DrainReason,
-    GaugeMetric, HealthStatus, MetricsReport, ShutdownReason,
-};
-use zentinel_agent_protocol::{
-    AgentResponse, AuditMetadata, EventType, RequestBodyChunkEvent,
-    RequestCompleteEvent, RequestHeadersEvent, ResponseBodyChunkEvent, ResponseHeadersEvent,
-    WebSocketDecision, WebSocketFrameEvent,
-};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use validation::{JsonSchemaValidator, MsgpackValidator};
+use zentinel_agent_protocol::v2::{
+    AgentCapabilities, AgentFeatures, AgentHandlerV2, AgentLimits, CounterMetric, DrainReason,
+    GaugeMetric, HealthStatus, MetricsReport, ShutdownReason,
+};
+use zentinel_agent_protocol::{
+    AgentResponse, AuditMetadata, EventType, RequestBodyChunkEvent, RequestCompleteEvent,
+    RequestHeadersEvent, ResponseBodyChunkEvent, ResponseHeadersEvent, WebSocketDecision,
+    WebSocketFrameEvent,
+};
 
 pub use config::WsInspectorConfig as Config;
 
@@ -298,12 +298,11 @@ impl WsInspectorAgent {
         };
 
         // Track bytes inspected
-        self.bytes_inspected.fetch_add(data.len() as u64, Ordering::Relaxed);
+        self.bytes_inspected
+            .fetch_add(data.len() as u64, Ordering::Relaxed);
 
         // Check size limits
-        if let Some(response) =
-            self.check_size_limits(&state.config, &event.opcode, data.len())
-        {
+        if let Some(response) = self.check_size_limits(&state.config, &event.opcode, data.len()) {
             return response;
         }
 
@@ -397,7 +396,11 @@ impl WsInspectorAgent {
         }
 
         if !validation_errors.is_empty() {
-            return self.handle_validation_errors(&state.config, &validation_errors, correlation_id);
+            return self.handle_validation_errors(
+                &state.config,
+                &validation_errors,
+                correlation_id,
+            );
         }
 
         AgentResponse::websocket_allow()
@@ -439,12 +442,10 @@ impl WsInspectorAgent {
                         }),
                 );
             } else {
-                return Some(
-                    AgentResponse::websocket_allow().with_audit(AuditMetadata {
-                        tags: vec!["ws-size-limit".to_string(), "detect-only".to_string()],
-                        ..Default::default()
-                    }),
-                );
+                return Some(AgentResponse::websocket_allow().with_audit(AuditMetadata {
+                    tags: vec!["ws-size-limit".to_string(), "detect-only".to_string()],
+                    ..Default::default()
+                }));
             }
         }
 
@@ -630,10 +631,9 @@ impl AgentHandlerV2 for WsInspectorAgent {
             }
             Err(_) => 0.0, // If we can't get the lock, assume not draining
         };
-        report.gauges.push(GaugeMetric::new(
-            "ws_inspector_draining",
-            draining,
-        ));
+        report
+            .gauges
+            .push(GaugeMetric::new("ws_inspector_draining", draining));
 
         Some(report)
     }
@@ -857,7 +857,8 @@ mod tests {
         let config_json = serde_json::json!({
             "xss-detection": false
         });
-        let result = AgentHandlerV2::on_configure(&agent, config_json, Some("1.0".to_string())).await;
+        let result =
+            AgentHandlerV2::on_configure(&agent, config_json, Some("1.0".to_string())).await;
         assert!(result); // Should return true on success
 
         // Verify XSS is now allowed

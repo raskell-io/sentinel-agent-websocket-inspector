@@ -150,7 +150,10 @@ mod tests {
         let detections = inspector.inspect_text("; rm -rf /");
 
         assert_eq!(detections.len(), 1);
-        assert_eq!(detections[0].detection_type, DetectionType::CommandInjection);
+        assert_eq!(
+            detections[0].detection_type,
+            DetectionType::CommandInjection
+        );
     }
 
     #[test]

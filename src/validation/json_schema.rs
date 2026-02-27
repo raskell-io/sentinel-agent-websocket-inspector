@@ -137,8 +137,7 @@ mod tests {
         assert!(result.valid);
 
         // Invalid: negative timestamp
-        let result =
-            validator.validate_str(r#"{"type": "message", "data": {}, "timestamp": -1}"#);
+        let result = validator.validate_str(r#"{"type": "message", "data": {}, "timestamp": -1}"#);
         assert!(!result.valid);
     }
 }

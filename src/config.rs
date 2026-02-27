@@ -96,9 +96,7 @@ impl WsInspectorConfig {
 
     /// Check if any size limits are set
     pub fn has_size_limits(&self) -> bool {
-        self.max_text_frame_size > 0
-            || self.max_binary_frame_size > 0
-            || self.max_message_size > 0
+        self.max_text_frame_size > 0 || self.max_binary_frame_size > 0 || self.max_message_size > 0
     }
 
     /// Check if schema validation is enabled

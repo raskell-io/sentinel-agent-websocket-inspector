@@ -2,11 +2,11 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use zentinel_agent_protocol::v2::{GrpcAgentServerV2, UdsAgentServerV2};
-use zentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
 use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
+use zentinel_agent_protocol::v2::{GrpcAgentServerV2, UdsAgentServerV2};
+use zentinel_agent_websocket_inspector::{config::WsInspectorConfig, WsInspectorAgent};
 
 /// WebSocket Inspector Agent for Zentinel proxy
 ///
@@ -17,11 +17,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 #[command(version, about, long_about = None)]
 struct Args {
     /// Unix socket path for agent communication (UDS transport)
-    #[arg(
-        long,
-        env = "AGENT_SOCKET",
-        default_value = "/tmp/zentinel-ws.sock"
-    )]
+    #[arg(long, env = "AGENT_SOCKET", default_value = "/tmp/zentinel-ws.sock")]
     socket: String,
 
     /// gRPC address to listen on (e.g., "0.0.0.0:50051").

@@ -4,13 +4,13 @@
 //! to verify the full protocol flow.
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use zentinel_agent_protocol::{
-    WebSocketDecision, WebSocketFrameEvent,
-    v2::{AgentClientV2Uds, UdsAgentServerV2},
-};
-use zentinel_agent_websocket_inspector::{Config, WsInspectorAgent};
 use std::time::Duration;
 use tempfile::tempdir;
+use zentinel_agent_protocol::{
+    v2::{AgentClientV2Uds, UdsAgentServerV2},
+    WebSocketDecision, WebSocketFrameEvent,
+};
+use zentinel_agent_websocket_inspector::{Config, WsInspectorAgent};
 
 /// Helper to start an agent server and return the socket path
 async fn start_test_server(config: Config) -> (tempfile::TempDir, std::path::PathBuf) {
@@ -32,16 +32,23 @@ async fn start_test_server(config: Config) -> (tempfile::TempDir, std::path::Pat
 
 /// Create a client connected to the test server
 async fn create_client(socket_path: &std::path::Path) -> AgentClientV2Uds {
-    AgentClientV2Uds::new("test-client", socket_path.to_string_lossy().to_string(), Duration::from_secs(5))
-        .await
-        .expect("Failed to create agent client")
-        .connect()
-        .await
-        .expect("Failed to connect to agent")
+    let client = AgentClientV2Uds::new(
+        "test-client",
+        socket_path.to_string_lossy().to_string(),
+        Duration::from_secs(5),
+    )
+    .await
+    .expect("Failed to create agent client");
+    client.connect().await.expect("Failed to connect to agent");
+    client
 }
 
 /// Create a text frame event
-fn make_text_frame(correlation_id: &str, data: &str, client_to_server: bool) -> WebSocketFrameEvent {
+fn make_text_frame(
+    correlation_id: &str,
+    data: &str,
+    client_to_server: bool,
+) -> WebSocketFrameEvent {
     WebSocketFrameEvent {
         correlation_id: correlation_id.to_string(),
         opcode: "text".to_string(),
@@ -290,7 +297,10 @@ async fn test_cmd_injection_semicolon_blocked() {
         .expect("Failed to send event");
 
     assert!(is_drop(&response.websocket_decision));
-    assert!(response.audit.tags.contains(&"ws-cmd-injection".to_string()));
+    assert!(response
+        .audit
+        .tags
+        .contains(&"ws-cmd-injection".to_string()));
 }
 
 #[tokio::test]
@@ -311,7 +321,10 @@ async fn test_cmd_injection_pipe_blocked() {
         .expect("Failed to send event");
 
     assert!(is_drop(&response.websocket_decision));
-    assert!(response.audit.tags.contains(&"ws-cmd-injection".to_string()));
+    assert!(response
+        .audit
+        .tags
+        .contains(&"ws-cmd-injection".to_string()));
 }
 
 #[tokio::test]
@@ -332,7 +345,10 @@ async fn test_cmd_injection_backtick_blocked() {
         .expect("Failed to send event");
 
     assert!(is_drop(&response.websocket_decision));
-    assert!(response.audit.tags.contains(&"ws-cmd-injection".to_string()));
+    assert!(response
+        .audit
+        .tags
+        .contains(&"ws-cmd-injection".to_string()));
 }
 
 // =============================================================================
@@ -442,7 +458,11 @@ async fn test_rate_limit_messages_per_sec() {
             .send_websocket_frame(&event.correlation_id, &event)
             .await
             .expect("Failed to send event");
-        assert!(is_allow(&response.websocket_decision), "Message {} should be allowed", i);
+        assert!(
+            is_allow(&response.websocket_decision),
+            "Message {} should be allowed",
+            i
+        );
     }
 
     // 4th message should be rate limited
@@ -666,7 +686,10 @@ async fn test_custom_pattern_blocked() {
         .expect("Failed to send event");
 
     assert!(is_drop(&response.websocket_decision));
-    assert!(response.audit.tags.contains(&"ws-custom-pattern".to_string()));
+    assert!(response
+        .audit
+        .tags
+        .contains(&"ws-custom-pattern".to_string()));
 }
 
 // =============================================================================

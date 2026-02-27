@@ -16,19 +16,10 @@ fn get_xss_patterns() -> &'static Vec<(Regex, &'static str)> {
     XSS_PATTERNS.get_or_init(|| {
         vec![
             // Script tags
-            (
-                Regex::new(r"(?i)<\s*script").unwrap(),
-                "xss-script-tag",
-            ),
-            (
-                Regex::new(r"(?i)</\s*script").unwrap(),
-                "xss-script-close",
-            ),
+            (Regex::new(r"(?i)<\s*script").unwrap(), "xss-script-tag"),
+            (Regex::new(r"(?i)</\s*script").unwrap(), "xss-script-close"),
             // Event handlers
-            (
-                Regex::new(r"(?i)\bon\w+\s*=").unwrap(),
-                "xss-event-handler",
-            ),
+            (Regex::new(r"(?i)\bon\w+\s*=").unwrap(), "xss-event-handler"),
             // JavaScript URI
             (
                 Regex::new(r"(?i)javascript\s*:").unwrap(),
@@ -40,10 +31,7 @@ fn get_xss_patterns() -> &'static Vec<(Regex, &'static str)> {
                 "xss-data-uri",
             ),
             // VBScript (for completeness)
-            (
-                Regex::new(r"(?i)vbscript\s*:").unwrap(),
-                "xss-vbscript-uri",
-            ),
+            (Regex::new(r"(?i)vbscript\s*:").unwrap(), "xss-vbscript-uri"),
             // Expression (old IE)
             (
                 Regex::new(r"(?i)expression\s*\(").unwrap(),
@@ -55,10 +43,7 @@ fn get_xss_patterns() -> &'static Vec<(Regex, &'static str)> {
                 "xss-svg-onload",
             ),
             // Iframe injection
-            (
-                Regex::new(r"(?i)<\s*iframe").unwrap(),
-                "xss-iframe",
-            ),
+            (Regex::new(r"(?i)<\s*iframe").unwrap(), "xss-iframe"),
             // Object/embed tags
             (
                 Regex::new(r"(?i)<\s*(object|embed)").unwrap(),
@@ -77,36 +62,18 @@ fn get_sqli_patterns() -> &'static Vec<(Regex, &'static str)> {
                 "sqli-union-select",
             ),
             // Tautology attacks
-            (
-                Regex::new(r"(?i)\bOR\s+1\s*=\s*1").unwrap(),
-                "sqli-or-1eq1",
-            ),
-            (
-                Regex::new(r"(?i)'\s*OR\s*'").unwrap(),
-                "sqli-or-string-eq",
-            ),
+            (Regex::new(r"(?i)\bOR\s+1\s*=\s*1").unwrap(), "sqli-or-1eq1"),
+            (Regex::new(r"(?i)'\s*OR\s*'").unwrap(), "sqli-or-string-eq"),
             (
                 Regex::new(r"(?i)\bAND\s+1\s*=\s*1").unwrap(),
                 "sqli-and-1eq1",
             ),
             // Comment injection
-            (
-                Regex::new(r"--\s*$").unwrap(),
-                "sqli-comment-dash",
-            ),
-            (
-                Regex::new(r"/\*.*\*/").unwrap(),
-                "sqli-comment-block",
-            ),
-            (
-                Regex::new(r"#\s*$").unwrap(),
-                "sqli-comment-hash",
-            ),
+            (Regex::new(r"--\s*$").unwrap(), "sqli-comment-dash"),
+            (Regex::new(r"/\*.*\*/").unwrap(), "sqli-comment-block"),
+            (Regex::new(r"#\s*$").unwrap(), "sqli-comment-hash"),
             // Time-based blind injection
-            (
-                Regex::new(r"(?i)\bSLEEP\s*\(").unwrap(),
-                "sqli-sleep",
-            ),
+            (Regex::new(r"(?i)\bSLEEP\s*\(").unwrap(), "sqli-sleep"),
             (
                 Regex::new(r"(?i)\bBENCHMARK\s*\(").unwrap(),
                 "sqli-benchmark",
@@ -126,10 +93,7 @@ fn get_sqli_patterns() -> &'static Vec<(Regex, &'static str)> {
                 "sqli-info-schema",
             ),
             // Hex encoding
-            (
-                Regex::new(r"(?i)0x[0-9a-f]+").unwrap(),
-                "sqli-hex-encoding",
-            ),
+            (Regex::new(r"(?i)0x[0-9a-f]+").unwrap(), "sqli-hex-encoding"),
         ]
     })
 }
@@ -138,31 +102,13 @@ fn get_cmd_patterns() -> &'static Vec<(Regex, &'static str)> {
     CMD_PATTERNS.get_or_init(|| {
         vec![
             // Shell command chaining
-            (
-                Regex::new(r";\s*\w+").unwrap(),
-                "cmd-semicolon-chain",
-            ),
-            (
-                Regex::new(r"\|\s*\w+").unwrap(),
-                "cmd-pipe-chain",
-            ),
-            (
-                Regex::new(r"&&\s*\w+").unwrap(),
-                "cmd-and-chain",
-            ),
-            (
-                Regex::new(r"\|\|\s*\w+").unwrap(),
-                "cmd-or-chain",
-            ),
+            (Regex::new(r";\s*\w+").unwrap(), "cmd-semicolon-chain"),
+            (Regex::new(r"\|\s*\w+").unwrap(), "cmd-pipe-chain"),
+            (Regex::new(r"&&\s*\w+").unwrap(), "cmd-and-chain"),
+            (Regex::new(r"\|\|\s*\w+").unwrap(), "cmd-or-chain"),
             // Command substitution
-            (
-                Regex::new(r"`[^`]+`").unwrap(),
-                "cmd-backtick",
-            ),
-            (
-                Regex::new(r"\$\([^)]+\)").unwrap(),
-                "cmd-dollar-paren",
-            ),
+            (Regex::new(r"`[^`]+`").unwrap(), "cmd-backtick"),
+            (Regex::new(r"\$\([^)]+\)").unwrap(), "cmd-dollar-paren"),
             // Common dangerous commands
             (
                 Regex::new(r"(?i)\b(cat|head|tail|less|more)\s+/etc/").unwrap(),
@@ -204,13 +150,11 @@ impl PatternMatcher {
         let compiled: Vec<(Regex, String)> = custom_patterns
             .into_iter()
             .enumerate()
-            .filter_map(|(i, pattern)| {
-                match Regex::new(&pattern) {
-                    Ok(re) => Some((re, format!("custom-{}", i))),
-                    Err(e) => {
-                        tracing::warn!(pattern = %pattern, error = %e, "Invalid custom pattern");
-                        None
-                    }
+            .filter_map(|(i, pattern)| match Regex::new(&pattern) {
+                Ok(re) => Some((re, format!("custom-{}", i))),
+                Err(e) => {
+                    tracing::warn!(pattern = %pattern, error = %e, "Invalid custom pattern");
+                    None
                 }
             })
             .collect();
@@ -301,7 +245,9 @@ mod tests {
 
         // Should detect
         assert!(matcher.check_command_injection("; ls -la").is_some());
-        assert!(matcher.check_command_injection("| cat /etc/passwd").is_some());
+        assert!(matcher
+            .check_command_injection("| cat /etc/passwd")
+            .is_some());
         assert!(matcher.check_command_injection("`whoami`").is_some());
         assert!(matcher.check_command_injection("$(id)").is_some());
 

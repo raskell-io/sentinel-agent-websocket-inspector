@@ -97,8 +97,7 @@ mod tests {
             }
         });
 
-        let json_validator =
-            super::super::JsonSchemaValidator::from_schema(schema).unwrap();
+        let json_validator = super::super::JsonSchemaValidator::from_schema(schema).unwrap();
         let validator = MsgpackValidator::with_schema(json_validator);
 
         // Valid message
