@@ -112,7 +112,7 @@ async fn test_clean_text_message() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-1", "Hello, world!", true);
     let response = client
@@ -129,7 +129,7 @@ async fn test_clean_json_message() {
     let config = Config::default();
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let json_msg = r#"{"type": "chat", "message": "Hello", "timestamp": 1234567890}"#;
     let event = make_text_frame("test-2", json_msg, true);
@@ -154,7 +154,7 @@ async fn test_xss_script_tag_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-xss-1", "<script>alert(1)</script>", true);
     let response = client
@@ -175,7 +175,7 @@ async fn test_xss_event_handler_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-xss-2", "onclick=alert(document.cookie)", true);
     let response = client
@@ -196,7 +196,7 @@ async fn test_xss_javascript_uri_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-xss-3", "javascript:alert(1)", true);
     let response = client
@@ -221,7 +221,7 @@ async fn test_sqli_union_select_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-sqli-1", "UNION SELECT * FROM users", true);
     let response = client
@@ -242,7 +242,7 @@ async fn test_sqli_or_tautology_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-sqli-2", "' OR '1'='1", true);
     let response = client
@@ -263,7 +263,7 @@ async fn test_sqli_time_based_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-sqli-3", "1; WAITFOR DELAY '00:00:10'", true);
     let response = client
@@ -288,7 +288,7 @@ async fn test_cmd_injection_semicolon_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-cmd-1", "; ls -la /etc/passwd", true);
     let response = client
@@ -312,7 +312,7 @@ async fn test_cmd_injection_pipe_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-cmd-2", "| cat /etc/shadow", true);
     let response = client
@@ -336,7 +336,7 @@ async fn test_cmd_injection_backtick_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-cmd-3", "`id`", true);
     let response = client
@@ -365,7 +365,7 @@ async fn test_detect_only_allows_with_tags() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-detect", "<script>UNION SELECT</script>", true);
     let response = client
@@ -396,7 +396,7 @@ async fn test_text_frame_size_limit() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Create a message that exceeds the limit
     let large_message = "x".repeat(200);
@@ -420,7 +420,7 @@ async fn test_binary_frame_size_limit() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Create binary data that exceeds the limit
     let large_data = vec![0u8; 100];
@@ -449,7 +449,7 @@ async fn test_rate_limit_messages_per_sec() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Send 3 messages - should all be allowed
     for i in 0..3 {
@@ -486,7 +486,7 @@ async fn test_rate_limit_separate_connections() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Connection 1: Use up the limit
     for _ in 0..2 {
@@ -528,7 +528,7 @@ async fn test_xss_disabled_allows_attack() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-disabled", "<script>UNION SELECT `id`</script>", true);
     let response = client
@@ -554,7 +554,7 @@ async fn test_server_to_client_inspection() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Server to client message with XSS
     let event = make_text_frame("test-s2c", "<script>bad</script>", false); // false = server→client
@@ -582,7 +582,7 @@ async fn test_ping_frame_allowed() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = WebSocketFrameEvent {
         correlation_id: "test-ping".to_string(),
@@ -613,7 +613,7 @@ async fn test_pong_frame_allowed() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = WebSocketFrameEvent {
         correlation_id: "test-pong".to_string(),
@@ -643,7 +643,7 @@ async fn test_close_frame_allowed() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = WebSocketFrameEvent {
         correlation_id: "test-close".to_string(),
@@ -677,7 +677,7 @@ async fn test_custom_pattern_blocked() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     let event = make_text_frame("test-custom", "token: secret-api-key-12345", true);
     let response = client
@@ -706,7 +706,7 @@ async fn test_binary_inspection_disabled_by_default() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Binary frame with XSS-like content
     let event = make_binary_frame("test-binary", b"<script>alert(1)</script>", true);
@@ -729,7 +729,7 @@ async fn test_binary_inspection_enabled() {
     };
 
     let (_dir, socket_path) = start_test_server(config).await;
-    let mut client = create_client(&socket_path).await;
+    let client = create_client(&socket_path).await;
 
     // Binary frame with XSS content
     let event = make_binary_frame("test-binary-2", b"<script>alert(1)</script>", true);
