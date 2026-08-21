@@ -43,12 +43,31 @@ zentinel bundle install websocket-inspector
 zentinel bundle install
 ```
 
-The bundle command downloads the correct binary for your platform and places it in the standard location. See the [bundle documentation](https://zentinelproxy.io/docs/deployment/bundle/) for details.
+The bundle command downloads the correct binary for your platform and places it in the standard location. See the [bundle documentation](https://docs.zentinelproxy.io/deployment/bundle/) for details.
 
 ### Using Cargo
 
+`zentinel-agent-websocket-inspector` is not published on crates.io, so `cargo install zentinel-agent-websocket-inspector` does not
+work. Install straight from the repository instead:
+
 ```bash
-cargo install zentinel-agent-websocket-inspector
+cargo install --git https://github.com/zentinelproxy/zentinel-agent-websocket-inspector
+```
+
+This builds and installs the `zentinel-websocket-inspector-agent` binary.
+
+### Prebuilt Binaries
+
+Each [release](https://github.com/zentinelproxy/zentinel-agent-websocket-inspector/releases) ships binaries
+for `linux-x86_64`, `linux-aarch64`, and `darwin-aarch64`:
+
+```bash
+VERSION=0.4.0
+PLATFORM=linux-x86_64   # or linux-aarch64, darwin-aarch64
+curl -fsSL -o zentinel-websocket-inspector-agent.tar.gz \
+  "https://github.com/zentinelproxy/zentinel-agent-websocket-inspector/releases/download/v${VERSION}/zentinel-websocket-inspector-agent-${VERSION}-${PLATFORM}.tar.gz"
+tar -xzf zentinel-websocket-inspector-agent.tar.gz
+sudo install -m 0755 zentinel-websocket-inspector-agent /usr/local/bin/
 ```
 
 ### From Source
